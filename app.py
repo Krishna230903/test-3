@@ -1,4 +1,4 @@
-# CrudeTrack - Oil & Gas Shipment and Analytics Platform (Modern UI)
+# CrudeTrack - Oil & Gas Shipment and Analytics Platform (Modern UI v2)
 # To run this app:
 # 1. Install necessary libraries: pip install streamlit pandas sqlalchemy bcrypt
 # 2. Save this code as a Python file (e.g., app.py)
@@ -20,89 +20,152 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- CUSTOM CSS FOR MODERN UI ---
-def local_css(file_name):
-    with open(file_name) as f:
-        st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
-
+# --- CUSTOM CSS FOR MODERN UI (v2) ---
 def inject_custom_css():
     st.markdown("""
         <style>
-            /* General App Styling */
+            /* --- General App Styling --- */
             .stApp {
-                background-color: #F0F2F6;
+                background-color: #0E1117;
+                color: #FAFAFA;
             }
-            
-            /* Main content area */
+
+            /* --- Main Content Area --- */
             .main .block-container {
                 padding-top: 2rem;
                 padding-bottom: 2rem;
-                padding-left: 5rem;
-                padding-right: 5rem;
+                padding-left: 3rem;
+                padding-right: 3rem;
             }
 
-            /* Custom Cards for Products/KPIs */
+            /* --- Sidebar Styling --- */
+            .st-emotion-cache-16txtl3 {
+                background-color: rgba(38, 39, 48, 0.4); /* Semi-transparent sidebar */
+            }
+            .st-emotion-cache-16txtl3 h1 {
+                color: #00A9FF;
+            }
+
+            /* --- Glassmorphism Card Effect --- */
             .custom-card {
-                background-color: #FFFFFF;
-                border-radius: 10px;
-                padding: 20px;
-                box-shadow: 0 4px 8px 0 rgba(0,0,0,0.1);
-                transition: 0.3s;
+                background: rgba(38, 39, 48, 0.6);
+                backdrop-filter: blur(10px);
+                -webkit-backdrop-filter: blur(10px);
+                border-radius: 15px;
+                border: 1px solid rgba(255, 255, 255, 0.18);
+                padding: 25px;
+                box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
                 margin-bottom: 20px;
                 height: 100%;
+                color: #FAFAFA;
             }
-            .custom-card:hover {
-                box-shadow: 0 8px 16px 0 rgba(0,0,0,0.2);
+            .custom-card h3, .custom-card .st-emotion-cache-10trblm {
+                color: #FAFAFA !important;
+            }
+            .custom-card .stImage > img {
+                border-radius: 10px;
             }
 
-            /* Styling for KPI metrics */
+            /* --- KPI Metric Styling --- */
             .stMetric {
-                background-color: #FFFFFF;
-                border-left: 5px solid #007BFF;
-                padding: 15px;
-                border-radius: 8px;
-                box-shadow: 0 2px 4px 0 rgba(0,0,0,0.1);
+                background: rgba(38, 39, 48, 0.6);
+                backdrop-filter: blur(5px);
+                -webkit-backdrop-filter: blur(5px);
+                border-left: 6px solid #00A9FF;
+                padding: 20px;
+                border-radius: 10px;
+                box-shadow: 0 4px 15px 0 rgba(0, 0, 0, 0.2);
+                color: #FAFAFA !important;
+            }
+            .stMetric .st-emotion-cache-1wivap2, .stMetric .st-emotion-cache-1g8m2i9 {
+                 color: #FAFAFA !important;
             }
 
-            /* Button styling */
+
+            /* --- Button Styling --- */
             .stButton>button {
-                border-radius: 20px;
-                border: 1px solid #007BFF;
-                color: #007BFF;
+                border-radius: 8px;
+                border: 1px solid #00A9FF;
+                color: #00A9FF;
                 background-color: transparent;
+                padding: 10px 20px;
+                font-weight: bold;
+                transition: all 0.3s ease;
             }
             .stButton>button:hover {
-                border-color: #0056b3;
-                color: #0056b3;
+                background-color: #00A9FF;
+                color: #FFFFFF;
+                border-color: #00A9FF;
+                box-shadow: 0 0 15px #00A9FF;
             }
             .stButton>button:focus {
-                box-shadow: none !important;
+                box-shadow: 0 0 15px #00A9FF !important;
             }
 
-            /* Login/Register Form Styling */
-            .login-form {
-                background: white;
-                padding: 2rem;
-                border-radius: 10px;
-                box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-                max-width: 450px;
-                margin: auto;
+            /* Primary Button (e.g., Place Order) */
+            .stButton.primary-btn>button {
+                background-color: #00A9FF;
+                color: #FFFFFF;
             }
+            .stButton.primary-btn>button:hover {
+                background-color: #0087cc;
+                box-shadow: 0 0 20px #00A9FF;
+            }
+
+
+            /* --- Login/Register Form Styling --- */
+            .login-container {
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                height: 80vh;
+            }
+            .login-form {
+                background: rgba(38, 39, 48, 0.7);
+                backdrop-filter: blur(10px);
+                -webkit-backdrop-filter: blur(10px);
+                padding: 2.5rem 3rem;
+                border-radius: 15px;
+                box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+                border: 1px solid rgba(255, 255, 255, 0.18);
+                width: 100%;
+                max-width: 450px;
+            }
+            .login-form h1 {
+                text-align: center;
+                color: #00A9FF;
+            }
+            .login-form .stRadio > div {
+                justify-content: center;
+            }
+
+            /* --- Dataframe Styling --- */
+            .stDataFrame {
+                background-color: rgba(38, 39, 48, 0.6);
+                border-radius: 10px;
+            }
+            
+            /* --- Headers --- */
+            h1, h2, h3 {
+                color: #FAFAFA;
+            }
+
         </style>
     """, unsafe_allow_html=True)
 
 # --- DATABASE SETUP ---
 DB_NAME = "crude_track.db"
 
+# Using a function to cache the connection can help in some Streamlit scenarios
+@st.cache_resource
 def get_db_connection():
     """Establishes a connection to the SQLite database."""
-    conn = sqlite3.connect(DB_NAME, check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    return conn
+    return sqlite3.connect(DB_NAME, check_same_thread=False)
 
 def setup_database():
     """Initializes the database and creates tables if they don't exist."""
     conn = get_db_connection()
+    conn.row_factory = sqlite3.Row
     c = conn.cursor()
     c.execute('''
         CREATE TABLE IF NOT EXISTS users (
@@ -129,9 +192,9 @@ def setup_database():
     c.execute("SELECT count(*) FROM products")
     if c.fetchone()[0] == 0:
         products_data = [
-            ('Brent Crude', 'A major trading classification of sweet light crude oil from the North Sea. It is used to price two-thirds of the world\'s internationally traded crude oil supplies.', 'Sullom Voe, UK', 'https://placehold.co/600x400/2D3748/FFFFFF?text=Brent+Crude'),
-            ('WTI Crude', 'West Texas Intermediate (WTI) is a light, sweet crude oil that is the benchmark for North American oil. It is sourced primarily from the Permian Basin.', 'Cushing, OK, USA', 'https://placehold.co/600x400/2D3748/FFFFFF?text=WTI+Crude'),
-            ('Dubai Crude', 'Also known as Fateh, this is a light sour crude oil extracted from Dubai. It is used as a price benchmark for exports of crude oil from the Persian Gulf to Asia.', 'Fateh Terminal, Dubai', 'https://placehold.co/600x400/2D3748/FFFFFF?text=Dubai+Crude')
+            ('Brent Crude', 'A major trading classification of sweet light crude oil from the North Sea. It is used to price two-thirds of the world\'s internationally traded crude oil supplies.', 'Sullom Voe, UK', 'https://placehold.co/600x400/0E1117/FFFFFF?text=Brent+Crude'),
+            ('WTI Crude', 'West Texas Intermediate (WTI) is a light, sweet crude oil that is the benchmark for North American oil. It is sourced primarily from the Permian Basin.', 'Cushing, OK, USA', 'https://placehold.co/600x400/0E1117/FFFFFF?text=WTI+Crude'),
+            ('Dubai Crude', 'Also known as Fateh, this is a light sour crude oil extracted from Dubai. It is used as a price benchmark for exports of crude oil from the Persian Gulf to Asia.', 'Fateh Terminal, Dubai', 'https://placehold.co/600x400/0E1117/FFFFFF?text=Dubai+Crude')
         ]
         c.executemany("INSERT INTO products (name, description, source_port, image_url) VALUES (?, ?, ?, ?)", products_data)
 
@@ -142,9 +205,9 @@ def setup_database():
         c.execute("INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)", ('admin', hashed_password, 'admin'))
 
     conn.commit()
-    conn.close()
+    # No conn.close() because we are using a cached resource
 
-# --- USER AUTHENTICATION & DATA FUNCTIONS (Same as before, for brevity) ---
+# --- USER AUTHENTICATION & DATA FUNCTIONS ---
 def hash_password(password):
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
 
@@ -161,24 +224,20 @@ def register_user(username, password, role='customer'):
         return True
     except sqlite3.IntegrityError:
         return False
-    finally:
-        conn.close()
 
 def validate_login(username, password):
     conn = get_db_connection()
+    conn.row_factory = sqlite3.Row
     c = conn.cursor()
     c.execute("SELECT * FROM users WHERE username = ?", (username,))
     user = c.fetchone()
-    conn.close()
     if user and check_password(user['password_hash'].encode('utf-8'), password):
         return {'id': user['id'], 'username': user['username'], 'role': user['role']}
     return None
 
 def get_all_products():
     conn = get_db_connection()
-    products = pd.read_sql_query("SELECT * FROM products", conn)
-    conn.close()
-    return products
+    return pd.read_sql_query("SELECT * FROM products", conn)
 
 def log_product_interaction(user_id, product_id):
     conn = get_db_connection()
@@ -186,7 +245,6 @@ def log_product_interaction(user_id, product_id):
     c.execute("INSERT INTO product_interactions (user_id, product_id, view_timestamp) VALUES (?, ?, ?)",
               (user_id, product_id, datetime.datetime.now()))
     conn.commit()
-    conn.close()
 
 def place_order(user_id, product_id, destination, quantity):
     conn = get_db_connection()
@@ -197,7 +255,6 @@ def place_order(user_id, product_id, destination, quantity):
     c.execute("INSERT INTO shipment_tracking (order_id, current_location, timestamp) VALUES (?, ?, ?)",
               (order_id, "Order confirmed. Awaiting dispatch from terminal.", datetime.datetime.now()))
     conn.commit()
-    conn.close()
     return order_id
 
 def get_user_orders(user_id):
@@ -227,23 +284,24 @@ def update_shipment_status(order_id, new_location):
               (order_id, new_location, datetime.datetime.now()))
     c.execute("UPDATE orders SET status = 'In Transit' WHERE id = ?", (order_id,))
     conn.commit()
-    conn.close()
 
 
 # --- UI COMPONENTS ---
 
 def login_register_page():
-    """Displays the login and registration forms with a modern look."""
-    st.markdown(f'<div class="login-form">', unsafe_allow_html=True)
-    st.title("Welcome to CrudeTrack 🚚")
-    st.write("Login or create an account to continue.")
+    """Displays the login and registration forms with the new modern look."""
+    st.markdown('<div class="login-container">', unsafe_allow_html=True)
+    st.markdown('<div class="login-form">', unsafe_allow_html=True)
+    st.markdown("<h1>CrudeTrack 🚚</h1>", unsafe_allow_html=True)
+    st.write(" ")
 
-    choice = st.radio("", ["Login", "Register"], horizontal=True)
+    choice = st.radio("", ["Login", "Register"], horizontal=True, label_visibility="collapsed")
 
     if choice == "Login":
-        with st.form("login_form"):
-            username = st.text_input("Username", placeholder="e.g., johndoe")
-            password = st.text_input("Password", type="password", placeholder="••••••••")
+        with st.form("login_form__"):
+            username = st.text_input("Username", placeholder="Enter your username", label_visibility="collapsed")
+            password = st.text_input("Password", type="password", placeholder="Enter your password", label_visibility="collapsed")
+            st.write("")
             submitted = st.form_submit_button("Login")
             if submitted:
                 user = validate_login(username, password)
@@ -257,16 +315,17 @@ def login_register_page():
                     st.error("Invalid username or password")
     
     elif choice == "Register":
-        with st.form("register_form"):
-            new_username = st.text_input("Choose a Username")
-            new_password = st.text_input("Choose a Password", type="password")
+        with st.form("register_form_"):
+            new_username = st.text_input("Username", placeholder="Choose a username", label_visibility="collapsed")
+            new_password = st.text_input("Password", type="password", placeholder="Choose a password", label_visibility="collapsed")
+            st.write("")
             submitted = st.form_submit_button("Register")
             if submitted:
                 if register_user(new_username, new_password):
                     st.success("Registration successful! Please login.")
                 else:
                     st.error("Username already exists.")
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown('</div></div>', unsafe_allow_html=True)
 
 
 def customer_portal():
@@ -288,9 +347,9 @@ def customer_portal():
         last_price = 78.50
         price_data = pd.DataFrame({'Time': [datetime.datetime.now()], 'Price (USD)': [last_price]})
         
-        for i in range(100): # Simulate updates
+        for i in range(100):
             new_price = last_price + np.random.randn() * 0.15
-            last_price = max(new_price, 60) # Prevent price from going too low
+            last_price = max(new_price, 60)
             now = datetime.datetime.now() + datetime.timedelta(seconds=i*2)
             new_row = pd.DataFrame({'Time': [now], 'Price (USD)': [new_price]})
             price_data = pd.concat([price_data, new_row], ignore_index=True)
@@ -303,36 +362,39 @@ def customer_portal():
         products = get_all_products()
         
         cols = st.columns(len(products))
-        for i, (index, row) in enumerate(products.iterrows()):
+        for i, (_, row) in enumerate(products.iterrows()):
             with cols[i]:
-                st.markdown(f'<div class="custom-card">', unsafe_allow_html=True)
-                st.image(row['image_url'])
-                st.subheader(row['name'])
-                st.caption(f"Source: {row['source_port']}")
-                st.write(row['description'])
-                if st.button(f"View {row['name']}", key=f"view_{row['id']}"):
-                    log_product_interaction(st.session_state['user_id'], row['id'])
-                    st.info(f"Your interest in {row['name']} has been noted by our team.")
-                st.markdown('</div>', unsafe_allow_html=True)
+                with st.container():
+                    st.markdown('<div class="custom-card">', unsafe_allow_html=True)
+                    st.image(row['image_url'])
+                    st.subheader(row['name'])
+                    st.caption(f"Source: {row['source_port']}")
+                    st.write(row['description'])
+                    st.markdown('</div>', unsafe_allow_html=True)
 
         st.markdown("---")
         st.header("📝 Place a New Order")
-        with st.form("order_form"):
-            col1, col2 = st.columns(2)
-            with col1:
-                selected_product_name = st.selectbox("Select Product", products['name'].tolist())
-                quantity = st.number_input("Quantity (barrels)", min_value=100, step=100)
-            with col2:
-                destination = st.text_input("Destination City", placeholder="e.g., Rotterdam")
-                st.write("") # Spacer
-                st.write("") # Spacer
-                submitted = st.form_submit_button("Place Order")
+        with st.container():
+            st.markdown('<div class="custom-card">', unsafe_allow_html=True)
+            with st.form("order_form"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    selected_product_name = st.selectbox("Select Product", products['name'].tolist())
+                    quantity = st.number_input("Quantity (barrels)", min_value=100, step=100)
+                with col2:
+                    destination = st.text_input("Destination City", placeholder="e.g., Rotterdam")
+                
+                st.markdown('<div class="primary-btn">', unsafe_allow_html=True)
+                submitted = st.form_submit_button("Place Your Order")
+                st.markdown('</div>', unsafe_allow_html=True)
 
-            if submitted:
-                product_id = products[products['name'] == selected_product_name]['id'].iloc[0]
-                order_id = place_order(st.session_state['user_id'], product_id, destination, quantity)
-                st.success(f"🎉 Order placed successfully! Your Order ID is: **{order_id}**")
-                st.balloons()
+                if submitted:
+                    product_id = products[products['name'] == selected_product_name]['id'].iloc[0]
+                    order_id = place_order(st.session_state['user_id'], product_id, destination, quantity)
+                    st.success(f"🎉 Order placed successfully! Your Order ID is: **{order_id}**")
+                    st.balloons()
+            st.markdown('</div>', unsafe_allow_html=True)
+
 
     elif page == "🚚 Track Shipments":
         st.header("🚚 Track Your Shipments")
@@ -380,12 +442,9 @@ def admin_dashboard():
 
         st.markdown("### Key Performance Indicators")
         kpi1, kpi2, kpi3 = st.columns(3)
-        with kpi1:
-            st.metric("Total Orders Placed", f"{total_orders}")
-        with kpi2:
-            st.metric("Total Barrels Ordered", f"{total_barrels:,}")
-        with kpi3:
-            st.metric("Most Viewed Product", most_popular_product)
+        kpi1.metric("Total Orders Placed", f"{total_orders}")
+        kpi2.metric("Total Barrels Ordered", f"{total_barrels:,}")
+        kpi3.metric("Most Viewed Product", most_popular_product)
         
         st.markdown("---")
 
@@ -430,7 +489,7 @@ def admin_dashboard():
                     st.success(f"Status for Order #{selected_order_id} updated.")
             
             st.subheader("Current Tracking Info for Selected Order")
-            if selected_order_id:
+            if 'selected_order_id' in locals() and selected_order_id:
                 tracking_info = get_tracking_info(selected_order_id)
                 st.dataframe(tracking_info, use_container_width=True)
 
