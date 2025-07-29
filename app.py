@@ -1,4 +1,4 @@
-# CrudeTrack - Oil & Gas Shipment and Analytics Platform (Modern UI v2 - Refined)
+# CrudeTrack - Oil & Gas Shipment and Analytics Platform (Modern UI v2 - Final)
 # To run this app:
 # 1. Install necessary libraries: pip install streamlit pandas sqlalchemy bcrypt
 # 2. Save this code as a Python file (e.g., app.py)
@@ -117,8 +117,9 @@ def inject_custom_css():
             .login-container {
                 display: flex;
                 justify-content: center;
-                align-items: center;
-                height: 80vh;
+                align-items: flex-start; /* Changed from 'center' to move form to the top */
+                padding-top: 10vh;      /* Added padding so it's not at the very top */
+                min-height: 90vh;
             }
             .login-form {
                 background: rgba(38, 39, 48, 0.7);
@@ -294,7 +295,6 @@ def get_product_interaction_analytics():
     """
     return pd.read_sql_query(query, conn)
 
-# --- REFINED FUNCTION ---
 def update_shipment_status(order_id, new_location, new_status):
     """Updates shipment location and status."""
     conn = get_db_connection()
@@ -395,7 +395,6 @@ def customer_portal():
         
         products = get_all_products()
         
-        # --- REFINED LOGIC ---
         # Log product views once per session to populate analytics data
         if 'products_viewed' not in st.session_state:
             for pid in products['id']:
@@ -518,7 +517,6 @@ def admin_dashboard():
         else:
             st.dataframe(orders_df[['id', 'username', 'product_name', 'destination_city', 'status']], use_container_width=True)
             
-            # --- REFINED UI ---
             st.markdown('<div class="custom-card">', unsafe_allow_html=True)
             with st.form("update_shipment_form"):
                 col1, col2, col3 = st.columns([1, 2, 1])
