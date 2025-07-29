@@ -1,4 +1,4 @@
-# CrudeTrack - Oil & Gas Shipment and Analytics Platform (Modern UI v2)
+# CrudeTrack - Oil & Gas Shipment and Analytics Platform (Modern UI v2 - Refined)
 # To run this app:
 # 1. Install necessary libraries: pip install streamlit pandas sqlalchemy bcrypt
 # 2. Save this code as a Python file (e.g., app.py)
@@ -156,7 +156,6 @@ def inject_custom_css():
 # --- DATABASE SETUP ---
 DB_NAME = "crude_track.db"
 
-# Using a function to cache the connection can help in some Streamlit scenarios
 @st.cache_resource
 def get_db_connection():
     """Establishes a connection to the SQLite database."""
@@ -189,15 +188,17 @@ def setup_database():
             id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, product_id INTEGER, view_timestamp TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users (id), FOREIGN KEY (product_id) REFERENCES products (id))''')
 
+    # Seed initial data for products if table is empty
     c.execute("SELECT count(*) FROM products")
     if c.fetchone()[0] == 0:
         products_data = [
-            ('Brent Crude', 'A major trading classification of sweet light crude oil from the North Sea. It is used to price two-thirds of the world\'s internationally traded crude oil supplies.', 'Sullom Voe, UK', 'https://placehold.co/600x400/0E1117/FFFFFF?text=Brent+Crude'),
-            ('WTI Crude', 'West Texas Intermediate (WTI) is a light, sweet crude oil that is the benchmark for North American oil. It is sourced primarily from the Permian Basin.', 'Cushing, OK, USA', 'https://placehold.co/600x400/0E1117/FFFFFF?text=WTI+Crude'),
-            ('Dubai Crude', 'Also known as Fateh, this is a light sour crude oil extracted from Dubai. It is used as a price benchmark for exports of crude oil from the Persian Gulf to Asia.', 'Fateh Terminal, Dubai', 'https://placehold.co/600x400/0E1117/FFFFFF?text=Dubai+Crude')
+            ('Brent Crude', 'A major trading classification of sweet light crude oil from the North Sea. It is used to price two-thirds of the world\'s internationally traded crude oil supplies.', 'Sullom Voe, UK', 'https://images.unsplash.com/photo-1629115124174-a82d854344a2?q=80&w=1964&auto=format&fit=crop'),
+            ('WTI Crude', 'West Texas Intermediate (WTI) is a light, sweet crude oil that is the benchmark for North American oil. It is sourced primarily from the Permian Basin.', 'Cushing, OK, USA', 'https://images.unsplash.com/photo-1622384214138-2cf917637845?q=80&w=1974&auto=format&fit=crop'),
+            ('Dubai Crude', 'Also known as Fateh, this is a light sour crude oil extracted from Dubai. It is used as a price benchmark for exports of crude oil from the Persian Gulf to Asia.', 'Fateh Terminal, Dubai', 'https://images.unsplash.com/photo-1623861226131-45c1a742784d?q=80&w=1974&auto=format&fit=crop')
         ]
         c.executemany("INSERT INTO products (name, description, source_port, image_url) VALUES (?, ?, ?, ?)", products_data)
 
+    # Seed admin user if not exists
     c.execute("SELECT count(*) FROM users WHERE username = 'admin'")
     if c.fetchone()[0] == 0:
         admin_pass = "admin123"
@@ -205,7 +206,6 @@ def setup_database():
         c.execute("INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)", ('admin', hashed_password, 'admin'))
 
     conn.commit()
-    # No conn.close() because we are using a cached resource
 
 # --- USER AUTHENTICATION & DATA FUNCTIONS ---
 def hash_password(password):
@@ -252,6 +252,7 @@ def place_order(user_id, product_id, destination, quantity):
     c.execute("INSERT INTO orders (user_id, product_id, destination_city, quantity_barrels, order_date, status) VALUES (?, ?, ?, ?, ?, ?)",
               (user_id, product_id, destination, quantity, datetime.datetime.now(), 'Placed'))
     order_id = c.lastrowid
+    # Log initial tracking status
     c.execute("INSERT INTO shipment_tracking (order_id, current_location, timestamp) VALUES (?, ?, ?)",
               (order_id, "Order confirmed. Awaiting dispatch from terminal.", datetime.datetime.now()))
     conn.commit()
@@ -259,7 +260,11 @@ def place_order(user_id, product_id, destination, quantity):
 
 def get_user_orders(user_id):
     conn = get_db_connection()
-    query = "SELECT o.id, p.name as product_name, o.destination_city, o.quantity_barrels, o.order_date, o.status FROM orders o JOIN products p ON o.product_id = p.id WHERE o.user_id = ? ORDER BY o.order_date DESC"
+    query = """
+    SELECT o.id, p.name as product_name, o.destination_city, o.quantity_barrels, o.order_date, o.status 
+    FROM orders o JOIN products p ON o.product_id = p.id 
+    WHERE o.user_id = ? ORDER BY o.order_date DESC
+    """
     return pd.read_sql_query(query, conn, params=(user_id,))
 
 def get_tracking_info(order_id):
@@ -269,27 +274,48 @@ def get_tracking_info(order_id):
 
 def get_all_orders_for_admin():
     conn = get_db_connection()
-    query = "SELECT o.id, u.username, p.name as product_name, o.destination_city, o.quantity_barrels, o.order_date, o.status FROM orders o JOIN users u ON o.user_id = u.id JOIN products p ON o.product_id = p.id ORDER BY o.order_date DESC"
+    query = """
+    SELECT o.id, u.username, p.name as product_name, o.destination_city, o.quantity_barrels, o.order_date, o.status 
+    FROM orders o 
+    JOIN users u ON o.user_id = u.id 
+    JOIN products p ON o.product_id = p.id 
+    ORDER BY o.order_date DESC
+    """
     return pd.read_sql_query(query, conn)
 
 def get_product_interaction_analytics():
     conn = get_db_connection()
-    query = "SELECT p.name, COUNT(pi.id) as view_count FROM product_interactions pi JOIN products p ON pi.product_id = p.id GROUP BY p.name ORDER BY view_count DESC"
+    query = """
+    SELECT p.name, COUNT(pi.id) as view_count 
+    FROM product_interactions pi 
+    JOIN products p ON pi.product_id = p.id 
+    GROUP BY p.name 
+    ORDER BY view_count DESC
+    """
     return pd.read_sql_query(query, conn)
 
-def update_shipment_status(order_id, new_location):
+# --- REFINED FUNCTION ---
+def update_shipment_status(order_id, new_location, new_status):
+    """Updates shipment location and status."""
     conn = get_db_connection()
     c = conn.cursor()
+    
+    # Create a descriptive tracking message
+    tracking_message = f"Status changed to '{new_status}': {new_location}"
+    
     c.execute("INSERT INTO shipment_tracking (order_id, current_location, timestamp) VALUES (?, ?, ?)",
-              (order_id, new_location, datetime.datetime.now()))
-    c.execute("UPDATE orders SET status = 'In Transit' WHERE id = ?", (order_id,))
+              (order_id, tracking_message, datetime.datetime.now()))
+    
+    # Update the master order status
+    c.execute("UPDATE orders SET status = ? WHERE id = ?", (new_status, order_id))
+    
     conn.commit()
 
 
 # --- UI COMPONENTS ---
 
 def login_register_page():
-    """Displays the login and registration forms with the new modern look."""
+    """Displays the login and registration forms."""
     st.markdown('<div class="login-container">', unsafe_allow_html=True)
     st.markdown('<div class="login-form">', unsafe_allow_html=True)
     st.markdown("<h1>CrudeTrack 🚚</h1>", unsafe_allow_html=True)
@@ -321,15 +347,19 @@ def login_register_page():
             st.write("")
             submitted = st.form_submit_button("Register")
             if submitted:
-                if register_user(new_username, new_password):
+                if not new_username or not new_password:
+                    st.warning("Please enter both username and password.")
+                elif register_user(new_username, new_password):
                     st.success("Registration successful! Please login.")
+                    time.sleep(2)
+                    st.rerun()
                 else:
                     st.error("Username already exists.")
     st.markdown('</div></div>', unsafe_allow_html=True)
 
 
 def customer_portal():
-    """The main view for logged-in customers with a modern UI."""
+    """The main view for logged-in customers."""
     st.sidebar.title(f"Welcome, {st.session_state['username'].capitalize()}!")
     st.sidebar.markdown("---")
     page = st.sidebar.radio("Navigation", ["📈 Live Market", "🛢️ Products & Orders", "🚚 Track Shipments"])
@@ -344,56 +374,69 @@ def customer_portal():
         st.write("Real-time simulated price fluctuations for West Texas Intermediate crude oil.")
         price_chart_placeholder = st.empty()
         
-        last_price = 78.50
-        price_data = pd.DataFrame({'Time': [datetime.datetime.now()], 'Price (USD)': [last_price]})
+        # Initialize price data in session state to persist
+        if 'price_data' not in st.session_state:
+            st.session_state.price_data = pd.DataFrame({'Time': [datetime.datetime.now()], 'Price (USD)': [78.50]})
+
+        last_price = st.session_state.price_data['Price (USD)'].iloc[-1]
+        new_price = last_price + np.random.randn() * 0.15
+        last_price = max(new_price, 60)
+        new_row = pd.DataFrame({'Time': [datetime.datetime.now()], 'Price (USD)': [last_price]})
+        st.session_state.price_data = pd.concat([st.session_state.price_data, new_row], ignore_index=True).tail(100)
         
-        for i in range(100):
-            new_price = last_price + np.random.randn() * 0.15
-            last_price = max(new_price, 60)
-            now = datetime.datetime.now() + datetime.timedelta(seconds=i*2)
-            new_row = pd.DataFrame({'Time': [now], 'Price (USD)': [new_price]})
-            price_data = pd.concat([price_data, new_row], ignore_index=True)
-            with price_chart_placeholder:
-                st.line_chart(price_data.rename(columns={'Time':'index'}).set_index('index'))
-            time.sleep(0.5)
+        with price_chart_placeholder:
+            st.line_chart(st.session_state.price_data.rename(columns={'Time':'index'}).set_index('index'))
+        time.sleep(1)
+        st.rerun()
+
 
     elif page == "🛢️ Products & Orders":
         st.header("🛢️ Our Products")
+        
         products = get_all_products()
         
+        # --- REFINED LOGIC ---
+        # Log product views once per session to populate analytics data
+        if 'products_viewed' not in st.session_state:
+            for pid in products['id']:
+                log_product_interaction(st.session_state['user_id'], pid)
+            st.session_state['products_viewed'] = True
+
         cols = st.columns(len(products))
         for i, (_, row) in enumerate(products.iterrows()):
             with cols[i]:
-                with st.container():
-                    st.markdown('<div class="custom-card">', unsafe_allow_html=True)
-                    st.image(row['image_url'])
-                    st.subheader(row['name'])
-                    st.caption(f"Source: {row['source_port']}")
-                    st.write(row['description'])
-                    st.markdown('</div>', unsafe_allow_html=True)
+                st.markdown('<div class="custom-card">', unsafe_allow_html=True)
+                st.image(row['image_url'])
+                st.subheader(row['name'])
+                st.caption(f"Source: {row['source_port']}")
+                st.write(row['description'])
+                st.markdown('</div>', unsafe_allow_html=True)
 
         st.markdown("---")
         st.header("📝 Place a New Order")
-        with st.container():
-            st.markdown('<div class="custom-card">', unsafe_allow_html=True)
-            with st.form("order_form"):
-                col1, col2 = st.columns(2)
-                with col1:
-                    selected_product_name = st.selectbox("Select Product", products['name'].tolist())
-                    quantity = st.number_input("Quantity (barrels)", min_value=100, step=100)
-                with col2:
-                    destination = st.text_input("Destination City", placeholder="e.g., Rotterdam")
-                
-                st.markdown('<div class="primary-btn">', unsafe_allow_html=True)
-                submitted = st.form_submit_button("Place Your Order")
-                st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown('<div class="custom-card">', unsafe_allow_html=True)
+        with st.form("order_form"):
+            col1, col2 = st.columns(2)
+            with col1:
+                selected_product_name = st.selectbox("Select Product", products['name'].tolist())
+                quantity = st.number_input("Quantity (barrels)", min_value=100, step=100)
+            with col2:
+                destination = st.text_input("Destination City", placeholder="e.g., Rotterdam")
+            
+            # Use a div with a class to style the button
+            st.markdown('<div class="stButton primary-btn" style="display: flex; justify-content: flex-end;">', unsafe_allow_html=True)
+            submitted = st.form_submit_button("Place Your Order")
+            st.markdown('</div>', unsafe_allow_html=True)
 
-                if submitted:
+            if submitted:
+                if not destination:
+                    st.warning("Please enter a destination city.")
+                else:
                     product_id = products[products['name'] == selected_product_name]['id'].iloc[0]
                     order_id = place_order(st.session_state['user_id'], product_id, destination, quantity)
                     st.success(f"🎉 Order placed successfully! Your Order ID is: **{order_id}**")
                     st.balloons()
-            st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
 
 
     elif page == "🚚 Track Shipments":
@@ -419,7 +462,7 @@ def customer_portal():
                         st.markdown(f"**{row['timestamp']}**: `{row['current_location']}`")
 
 def admin_dashboard():
-    """The main view for logged-in admins with a modern UI."""
+    """The main view for logged-in admins."""
     st.sidebar.title("Admin Panel")
     st.sidebar.markdown(f"Logged in as **{st.session_state['username']}** (Admin)")
     st.sidebar.markdown("---")
@@ -475,23 +518,28 @@ def admin_dashboard():
         else:
             st.dataframe(orders_df[['id', 'username', 'product_name', 'destination_city', 'status']], use_container_width=True)
             
+            # --- REFINED UI ---
+            st.markdown('<div class="custom-card">', unsafe_allow_html=True)
             with st.form("update_shipment_form"):
-                col1, col2 = st.columns([1,3])
+                col1, col2, col3 = st.columns([1, 2, 1])
                 with col1:
                     order_ids = orders_df['id'].tolist()
-                    selected_order_id = st.selectbox("Order ID", order_ids)
+                    selected_order_id = st.selectbox("Order ID", order_ids, label_visibility="collapsed")
                 with col2:
-                    new_location = st.text_input("New Location / Status Update", placeholder="e.g., 'Passing through Suez Canal'")
+                    new_location = st.text_input("New Location / Status Update", placeholder="e.g., 'Passing through Suez Canal'", label_visibility="collapsed")
+                with col3:
+                    status_options = ['Placed', 'In Transit', 'Delayed', 'Delivered', 'Cancelled']
+                    new_status = st.selectbox("Status", status_options, label_visibility="collapsed")
                 
                 submitted = st.form_submit_button("Update Status")
-                if submitted and new_location:
-                    update_shipment_status(selected_order_id, new_location)
-                    st.success(f"Status for Order #{selected_order_id} updated.")
-            
-            st.subheader("Current Tracking Info for Selected Order")
-            if 'selected_order_id' in locals() and selected_order_id:
-                tracking_info = get_tracking_info(selected_order_id)
-                st.dataframe(tracking_info, use_container_width=True)
+                if submitted:
+                    if not new_location:
+                        st.warning("Please provide a location/status update message.")
+                    else:
+                        update_shipment_status(selected_order_id, new_location, new_status)
+                        st.success(f"Status for Order #{selected_order_id} updated.")
+                        st.rerun() # Rerun to show updated table
+            st.markdown('</div>', unsafe_allow_html=True)
 
 # --- MAIN APP LOGIC ---
 def main():
