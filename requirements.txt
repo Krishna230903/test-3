@@ -1,4 +1,6 @@
 streamlit
 pandas
-bcrypt
 numpy
+plotly
+scikit-learn
+fpdf
