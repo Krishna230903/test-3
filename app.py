@@ -1,456 +1,280 @@
-# CrudeTrack - Oil & Gas Shipment and Analytics Platform (Modern UI v3)
-# To run this app:
-# 1. Install necessary libraries: pip install streamlit pandas sqlalchemy bcrypt
-# 2. Save this code as a Python file (e.g., app.py)
-# 3. Run from your terminal: streamlit run app.py
-
+# main_app.py
 import streamlit as st
 import pandas as pd
-import sqlite3
-import datetime
-import bcrypt
-import time
 import numpy as np
+import plotly.express as px
+from sklearn.linear_model import LinearRegression
+from fpdf import FPDF
+import base64
+from datetime import date, timedelta
+import io
 
-# --- PAGE CONFIGURATION ---
+# --- Page Configuration ---
 st.set_page_config(
-    page_title="CrudeTrack",
-    page_icon="🚚",
+    page_title="Cold-Pressed Oil Business Dashboard",
+    page_icon="💧",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# --- CUSTOM CSS FOR MODERN UI (v3) ---
-def inject_custom_css():
-    st.markdown("""
-        <style>
-            /* --- Import Font --- */
-            @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap');
+# --- Helper Functions ---
 
-            /* --- General App Styling --- */
-            body {
-                font-family: 'Roboto', sans-serif;
-            }
+def generate_sample_data():
+    """Generates a sample sales DataFrame for demonstration."""
+    today = date.today()
+    dates = [today - timedelta(days=i) for i in range(365)]
+    oil_types = ['Sesame Oil', 'Coconut Oil', 'Groundnut Oil', 'Mustard Oil', 'Almond Oil']
+    customers = [f'Customer_{i}' for i in range(1, 51)]
+    
+    data = []
+    for d in dates:
+        num_sales = np.random.randint(5, 15)
+        for _ in range(num_sales):
+            oil = np.random.choice(oil_types)
+            customer = np.random.choice(customers)
+            quantity = np.random.randint(1, 5)
+            price = {'Sesame Oil': 350, 'Coconut Oil': 300, 'Groundnut Oil': 400, 'Mustard Oil': 250, 'Almond Oil': 800}[oil]
+            current_stock = np.random.randint(5, 50)
+            data.append({
+                'Date': d,
+                'InvoiceNo': f'INV-{np.random.randint(1000, 9999)}',
+                'CustomerName': customer,
+                'ProductName': oil,
+                'Quantity': quantity,
+                'Price': price,
+                'CurrentStock': current_stock
+            })
+    
+    df = pd.DataFrame(data)
+    df['Date'] = pd.to_datetime(df['Date'])
+    return df
 
-            .stApp {
-                background-image: url("https://images.unsplash.com/photo-1504994236319-3c1935682851?auto=format&fit=crop&q=80&w=2070");
-                background-size: cover;
-                background-attachment: fixed;
-                background-repeat: no-repeat;
-            }
-            
-            /* Add a dark overlay for better text readability */
-            .stApp::before {
-                content: "";
-                position: fixed;
-                left: 0;
-                right: 0;
-                top: 0;
-                bottom: 0;
-                background-color: rgba(0,0,0,0.75);
-                z-index: -2;
-            }
-            
-            /* Making sure the main content area is transparent */
-            .main .block-container {
-                background-color: transparent !important;
-                padding-top: 3rem;
-                padding-bottom: 3rem;
-                padding-left: 3rem;
-                padding-right: 3rem;
-            }
-            
-            /* --- Sidebar Styling --- */
-            section[data-testid="stSidebar"] {
-                background-color: rgba(14, 17, 23, 0.85);
-                backdrop-filter: blur(10px);
-                border-right: 1px solid rgba(255, 255, 255, 0.1);
-            }
-            .st-emotion-cache-16txtl3 h1, .st-emotion-cache-16txtl3 .st-emotion-cache-1g8m2i9 {
-                 color: #00A9FF;
-                 text-shadow: 0 0 10px #00A9FF;
-            }
+def create_download_link_pdf(val, filename):
+    """Creates a download link for the generated PDF report."""
+    b64 = base64.b64encode(val)
+    return f'<a href="data:application/octet-stream;base64,{b64.decode()}" download="{filename}.pdf">Download PDF Report</a>'
 
-            /* --- Polished Card Effect --- */
-            .custom-card {
-                background: rgba(25, 30, 40, 0.85);
-                backdrop-filter: blur(15px);
-                -webkit-backdrop-filter: blur(15px);
-                border-radius: 15px;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                padding: 30px;
-                box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
-                transition: all 0.3s ease-in-out;
-                height: 100%;
-                color: #FAFAFA;
-            }
-            .custom-card:hover {
-                transform: translateY(-8px);
-                box-shadow: 0 0 25px 0 rgba(0, 169, 255, 0.6);
-                border: 1px solid rgba(0, 169, 255, 0.6);
-            }
-            .custom-card h3 { color: #FAFAFA !important; }
+class PDF(FPDF):
+    """Custom PDF class to define header and footer."""
+    def header(self):
+        self.set_font('Arial', 'B', 12)
+        self.cell(0, 10, 'Monthly Business Report', 0, 1, 'C')
+        self.ln(10)
 
-            /* --- KPI Metric Styling --- */
-            .stMetric {
-                background: rgba(25, 30, 40, 0.8);
-                backdrop-filter: blur(10px);
-                border-left: 5px solid #00A9FF;
-                padding: 20px;
-                border-radius: 10px;
-                color: #FAFAFA !important;
-            }
-            
-            /* --- Button Styling --- */
-            .stButton>button {
-                border-radius: 8px;
-                border: 1px solid #00A9FF;
-                color: #00A9FF;
-                background-color: transparent;
-                padding: 12px 24px;
-                font-weight: bold;
-                transition: all 0.3s ease;
-            }
-            .stButton>button:hover {
-                background-color: #00A9FF;
-                color: #FFFFFF;
-                box-shadow: 0 0 15px #00A9FF;
-            }
-            
-            /* --- Login/Register Form Styling --- */
-            .login-container {
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                min-height: 90vh;
-            }
-            .login-form {
-                background: rgba(14, 17, 23, 0.9);
-                padding: 3rem;
-                border-radius: 15px;
-                box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-                border: 1px solid rgba(255, 255, 255, 0.18);
-                width: 100%;
-                max-width: 480px;
-            }
-            .login-form h1 {
-                text-align: center;
-                color: #00A9FF;
-                text-shadow: 0 0 10px rgba(0, 169, 255, 0.5);
-            }
-            
-            /* General text and headers */
-            h1, h2, h3, h4, h5, h6, p, label {
-                color: #FAFAFA;
-            }
-            h1, h2 {
-                border-bottom: 2px solid #00A9FF;
-                padding-bottom: 10px;
-                display: inline-block;
-            }
-        </style>
-    """, unsafe_allow_html=True)
+    def footer(self):
+        self.set_y(-15)
+        self.set_font('Arial', 'I', 8)
+        self.cell(0, 10, f'Page {self.page_no()}', 0, 0, 'C')
 
-# --- DATABASE SETUP ---
-DB_NAME = "crude_track.db"
+def generate_pdf_report(kpis, top_oils_df, low_stock_df):
+    """Generates a PDF report with key business insights."""
+    pdf = PDF()
+    pdf.add_page()
+    pdf.set_font('Arial', 'B', 16)
+    
+    # Title
+    pdf.cell(0, 10, f"Report for {date.today().strftime('%B %Y')}", 0, 1, 'L')
+    pdf.ln(5)
 
-@st.cache_resource
-def get_db_connection():
-    """Establishes a connection to the SQLite database."""
-    return sqlite3.connect(DB_NAME, check_same_thread=False)
+    # KPIs Section
+    pdf.set_font('Arial', 'B', 12)
+    pdf.cell(0, 10, 'Key Performance Indicators (KPIs)', 0, 1, 'L')
+    pdf.set_font('Arial', '', 10)
+    pdf.cell(0, 8, f"  - Total Sales: Rs. {kpis['total_sales']:,}", 0, 1, 'L')
+    pdf.cell(0, 8, f"  - Top-Selling Oil: {kpis['top_oil']}", 0, 1, 'L')
+    pdf.cell(0, 8, f"  - Repeat Customer Percentage: {kpis['repeat_customer_pct']:.2f}%", 0, 1, 'L')
+    pdf.ln(10)
 
-def setup_database():
-    """Initializes the database and creates tables if they don't exist."""
-    conn = get_db_connection()
-    conn.row_factory = sqlite3.Row
-    c = conn.cursor()
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL, role TEXT NOT NULL)''')
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS products (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, description TEXT,
-            source_port TEXT, image_url TEXT)''')
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS orders (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, product_id INTEGER,
-            destination_city TEXT, quantity_barrels INTEGER, order_date TIMESTAMP, status TEXT,
-            FOREIGN KEY (user_id) REFERENCES users (id), FOREIGN KEY (product_id) REFERENCES products (id))''')
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS shipment_tracking (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER, current_location TEXT, timestamp TIMESTAMP,
-            FOREIGN KEY (order_id) REFERENCES orders (id))''')
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS product_interactions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, product_id INTEGER, view_timestamp TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users (id), FOREIGN KEY (product_id) REFERENCES products (id))''')
+    # Top Selling Oils Section
+    pdf.set_font('Arial', 'B', 12)
+    pdf.cell(0, 10, 'Top 3 Selling Oils (by Quantity)', 0, 1, 'L')
+    pdf.set_font('Arial', '', 10)
+    for index, row in top_oils_df.iterrows():
+        pdf.cell(0, 8, f"  - {row['ProductName']}: {row['Quantity']} units", 0, 1, 'L')
+    pdf.ln(10)
 
-    # Seed initial data for products if table is empty
-    c.execute("SELECT count(*) FROM products")
-    if c.fetchone()[0] == 0:
-        products_data = [
-            ('Brent Crude', 'A major trading classification of sweet light crude oil from the North Sea. It is used to price two-thirds of the world\'s internationally traded crude oil supplies.', 'Sullom Voe, UK', 'https://images.unsplash.com/photo-1629115124174-a82d854344a2?q=80&w=1964&auto=format&fit=crop'),
-            ('WTI Crude', 'West Texas Intermediate (WTI) is a light, sweet crude oil that is the benchmark for North American oil. It is sourced primarily from the Permian Basin.', 'Cushing, OK, USA', 'https://images.unsplash.com/photo-1622384214138-2cf917637845?q=80&w=1974&auto=format&fit=crop'),
-            ('Dubai Crude', 'Also known as Fateh, this is a light sour crude oil extracted from Dubai. It is used as a price benchmark for exports of crude oil from the Persian Gulf to Asia.', 'Fateh Terminal, Dubai', 'https://images.unsplash.com/photo-1623861226131-45c1a742784d?q=80&w=1974&auto=format&fit=crop')
-        ]
-        c.executemany("INSERT INTO products (name, description, source_port, image_url) VALUES (?, ?, ?, ?)", products_data)
+    # Low Stock Alerts Section
+    pdf.set_font('Arial', 'B', 12)
+    pdf.cell(0, 10, 'Low Stock Items', 0, 1, 'L')
+    pdf.set_font('Arial', '', 10)
+    if not low_stock_df.empty:
+        for index, row in low_stock_df.iterrows():
+            pdf.cell(0, 8, f"  - {row['ProductName']}: {row['CurrentStock']} units remaining", 0, 1, 'L')
+    else:
+        pdf.cell(0, 8, "  All stock levels are healthy.", 0, 1, 'L')
+    
+    return pdf.output(dest='S').encode('latin-1')
 
-    # Seed admin user if not exists
-    c.execute("SELECT count(*) FROM users WHERE username = 'admin'")
-    if c.fetchone()[0] == 0:
-        admin_pass = "admin123"
-        hashed_password = bcrypt.hashpw(admin_pass.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-        c.execute("INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)", ('admin', hashed_password, 'admin'))
-    conn.commit()
 
-# --- USER AUTHENTICATION & DATA FUNCTIONS ---
-def hash_password(password):
-    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+# --- Sidebar ---
+st.sidebar.title("💧 Oil Business Dashboard")
+st.sidebar.markdown("Upload your sales data to get started.")
 
-def check_password(hashed_password, user_password):
-    return bcrypt.checkpw(user_password.encode('utf-8'), hashed_password)
+# File Uploader
+uploaded_file = st.sidebar.file_uploader(
+    "Choose a CSV or Excel file", 
+    type=['csv', 'xlsx']
+)
 
-def register_user(username, password, role='customer'):
-    conn = get_db_connection()
-    c = conn.cursor()
+# Sample Data Generation
+if st.sidebar.button('Generate Sample Data'):
+    df_sample = generate_sample_data()
+    # Convert DataFrame to CSV in-memory
+    towrite = io.BytesIO()
+    df_sample.to_csv(towrite, index=False, encoding='utf-8')
+    towrite.seek(0)
+    st.sidebar.download_button(
+        label="Download Sample CSV",
+        data=towrite,
+        file_name="sample_sales_data.csv",
+        mime="text/csv",
+    )
+    st.sidebar.info("A sample CSV has been generated. Download it and upload it above to test the dashboard.")
+
+# --- Main Dashboard ---
+if uploaded_file is not None:
     try:
-        hashed_pw = hash_password(password).decode('utf-8')
-        c.execute("INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)", (username, hashed_pw, role))
-        conn.commit()
-        return True
-    except sqlite3.IntegrityError:
-        return False
-
-def validate_login(username, password):
-    conn = get_db_connection()
-    conn.row_factory = sqlite3.Row
-    c = conn.cursor()
-    c.execute("SELECT * FROM users WHERE username = ?", (username,))
-    user = c.fetchone()
-    if user and check_password(user['password_hash'].encode('utf-8'), password):
-        return {'id': user['id'], 'username': user['username'], 'role': user['role']}
-    return None
-
-def get_all_products():
-    conn = get_db_connection()
-    return pd.read_sql_query("SELECT * FROM products", conn)
-
-def log_product_interaction(user_id, product_id):
-    conn = get_db_connection()
-    c = conn.cursor()
-    c.execute("INSERT INTO product_interactions (user_id, product_id, view_timestamp) VALUES (?, ?, ?)",
-              (user_id, product_id, datetime.datetime.now()))
-    conn.commit()
-
-def place_order(user_id, product_id, destination, quantity):
-    conn = get_db_connection()
-    c = conn.cursor()
-    c.execute("INSERT INTO orders (user_id, product_id, destination_city, quantity_barrels, order_date, status) VALUES (?, ?, ?, ?, ?, ?)",
-              (user_id, product_id, destination, quantity, datetime.datetime.now(), 'Placed'))
-    order_id = c.lastrowid
-    c.execute("INSERT INTO shipment_tracking (order_id, current_location, timestamp) VALUES (?, ?, ?)",
-              (order_id, "Order confirmed. Awaiting dispatch from terminal.", datetime.datetime.now()))
-    conn.commit()
-    return order_id
-
-def get_user_orders(user_id):
-    conn = get_db_connection()
-    query = "SELECT o.id, p.name as product_name, o.destination_city, o.quantity_barrels, o.order_date, o.status FROM orders o JOIN products p ON o.product_id = p.id WHERE o.user_id = ? ORDER BY o.order_date DESC"
-    return pd.read_sql_query(query, conn, params=(user_id,))
-
-def get_tracking_info(order_id):
-    conn = get_db_connection()
-    query = "SELECT current_location, timestamp FROM shipment_tracking WHERE order_id = ? ORDER BY timestamp DESC"
-    return pd.read_sql_query(query, conn, params=(order_id,))
-
-def get_all_orders_for_admin():
-    conn = get_db_connection()
-    query = "SELECT o.id, u.username, p.name as product_name, o.destination_city, o.quantity_barrels, o.order_date, o.status FROM orders o JOIN users u ON o.user_id = u.id JOIN products p ON o.product_id = p.id ORDER BY o.order_date DESC"
-    return pd.read_sql_query(query, conn)
-
-def get_product_interaction_analytics():
-    conn = get_db_connection()
-    query = "SELECT p.name, COUNT(pi.id) as view_count FROM product_interactions pi JOIN products p ON pi.product_id = p.id GROUP BY p.name ORDER BY view_count DESC"
-    return pd.read_sql_query(query, conn)
-
-def update_shipment_status(order_id, new_location, new_status):
-    conn = get_db_connection()
-    c = conn.cursor()
-    tracking_message = f"Status changed to '{new_status}': {new_location}"
-    c.execute("INSERT INTO shipment_tracking (order_id, current_location, timestamp) VALUES (?, ?, ?)",
-              (order_id, tracking_message, datetime.datetime.now()))
-    c.execute("UPDATE orders SET status = ? WHERE id = ?", (new_status, order_id))
-    conn.commit()
-
-# --- UI COMPONENTS ---
-def login_register_page():
-    st.markdown('<div class="login-container">', unsafe_allow_html=True)
-    with st.container():
-        st.markdown('<div class="login-form">', unsafe_allow_html=True)
-        st.markdown("<h1>CrudeTrack 🚚</h1>", unsafe_allow_html=True)
-        st.write(" ")
-        choice = st.radio("", ["Login", "Register"], horizontal=True, label_visibility="collapsed")
-        if choice == "Login":
-            with st.form("login_form__"):
-                username = st.text_input("Username", placeholder="Enter your username", label_visibility="collapsed")
-                password = st.text_input("Password", type="password", placeholder="Enter your password", label_visibility="collapsed")
-                st.form_submit_button("Login", use_container_width=True)
-                if st.session_state.get('form_submit_button_login_form__'):
-                    user = validate_login(username, password)
-                    if user:
-                        st.session_state['logged_in'] = True
-                        st.session_state['user_id'] = user['id']
-                        st.session_state['username'] = user['username']
-                        st.session_state['role'] = user['role']
-                        st.rerun()
-                    else: st.error("Invalid username or password")
-        elif choice == "Register":
-            with st.form("register_form_"):
-                new_username = st.text_input("Username", placeholder="Choose a username", label_visibility="collapsed")
-                new_password = st.text_input("Password", type="password", placeholder="Choose a password", label_visibility="collapsed")
-                submitted = st.form_submit_button("Register", use_container_width=True)
-                if submitted:
-                    if register_user(new_username, new_password):
-                        st.success("Registration successful! Please login.")
-                    else: st.error("Username already exists.")
-        st.markdown('</div>', unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
-
-def customer_portal():
-    st.sidebar.title(f"Welcome, {st.session_state['username'].capitalize()}!")
-    st.sidebar.markdown("---")
-    page = st.sidebar.radio("Navigation", ["📈 Live Market", "🛢️ Products & Orders", "🚚 Track Shipments"])
-    st.sidebar.markdown("---")
-    if st.sidebar.button("Logout"):
-        for key in list(st.session_state.keys()): del st.session_state[key]
-        st.rerun()
-
-    if page == "📈 Live Market":
-        st.header("📈 Live Crude Oil Price (WTI)")
-        st.write("Real-time simulated price fluctuations for West Texas Intermediate crude oil.")
-        price_chart_placeholder = st.empty()
-        if 'price_data' not in st.session_state:
-            st.session_state.price_data = pd.DataFrame({'Time': [datetime.datetime.now()], 'Price (USD)': [78.50]})
-        last_price = st.session_state.price_data['Price (USD)'].iloc[-1]
-        new_price = last_price + np.random.randn() * 0.15
-        new_row = pd.DataFrame({'Time': [datetime.datetime.now()], 'Price (USD)': [max(new_price, 60)]})
-        st.session_state.price_data = pd.concat([st.session_state.price_data, new_row], ignore_index=True).tail(100)
-        with price_chart_placeholder:
-            st.line_chart(st.session_state.price_data.rename(columns={'Time':'index'}).set_index('index'))
-        time.sleep(1)
-        st.rerun()
-
-    elif page == "🛢️ Products & Orders":
-        st.header("🛢️ Our Products")
-        products = get_all_products()
-        if 'products_viewed' not in st.session_state:
-            for pid in products['id']: log_product_interaction(st.session_state['user_id'], pid)
-            st.session_state['products_viewed'] = True
-        
-        cols = st.columns(len(products))
-        for i, (_, row) in enumerate(products.iterrows()):
-            with cols[i]:
-                st.markdown('<div class="custom-card">', unsafe_allow_html=True)
-                st.image(row['image_url'], use_column_width=True)
-                st.subheader(row['name'])
-                st.caption(f"Source: {row['source_port']}")
-                st.write(row['description'])
-                st.markdown('</div>', unsafe_allow_html=True)
-        st.markdown("---")
-        st.header("📝 Place a New Order")
-        st.markdown('<div class="custom-card">', unsafe_allow_html=True)
-        with st.form("order_form"):
-            col1, col2, col3 = st.columns([2,1,1])
-            selected_product_name = col1.selectbox("Select Product", products['name'].tolist())
-            quantity = col2.number_input("Quantity (barrels)", min_value=100, step=100)
-            destination = col3.text_input("Destination City", placeholder="e.g., Rotterdam")
-            submitted = st.form_submit_button("Place Your Order", use_container_width=True)
-            if submitted and destination:
-                product_id = products[products['name'] == selected_product_name]['id'].iloc[0]
-                order_id = place_order(st.session_state['user_id'], product_id, destination, quantity)
-                st.success(f"🎉 Order placed successfully! Your Order ID is: **{order_id}**")
-                st.balloons()
-            elif submitted: st.warning("Please enter a destination city.")
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    elif page == "🚚 Track Shipments":
-        st.header("🚚 Track Your Shipments")
-        my_orders = get_user_orders(st.session_state['user_id'])
-        if my_orders.empty:
-            st.info("You have no active orders. Place one from the Products page!")
+        # Read the uploaded file
+        if uploaded_file.name.endswith('.csv'):
+            df = pd.read_csv(uploaded_file)
         else:
-            st.dataframe(my_orders, use_container_width=True)
-            selected_order_id = st.selectbox("Select an Order ID to see detailed tracking:", my_orders['id'].tolist())
-            if selected_order_id:
-                st.subheader(f"Tracking History for Order #{selected_order_id}")
-                tracking_history = get_tracking_info(selected_order_id)
-                if tracking_history.empty: st.warning("No tracking information available yet.")
-                else: 
-                    for _, row in tracking_history.iterrows(): st.markdown(f"**{row['timestamp']}**: `{row['current_location']}`")
+            df = pd.read_excel(uploaded_file)
 
-def admin_dashboard():
-    st.sidebar.title("Admin Panel")
-    st.sidebar.markdown(f"Logged in as **{st.session_state['username']}** (Admin)")
-    st.sidebar.markdown("---")
-    page = st.sidebar.radio("Navigation", ["📊 Dashboard", "⚙️ Manage Shipments"])
-    st.sidebar.markdown("---")
-    if st.sidebar.button("Logout"):
-        for key in list(st.session_state.keys()): del st.session_state[key]
-        st.rerun()
+        # --- Data Cleaning and Preparation ---
+        st.header("Raw Data Preview")
+        st.dataframe(df.head())
 
-    if page == "📊 Dashboard":
-        st.header("📊 Business Analytics Dashboard")
-        orders_df, interactions_df = get_all_orders_for_admin(), get_product_interaction_analytics()
-        total_orders = len(orders_df)
-        total_barrels = orders_df['quantity_barrels'].sum() if not orders_df.empty else 0
-        most_popular = interactions_df['name'].iloc[0] if not interactions_df.empty else "N/A"
+        # Standardize column names (basic example)
+        df.columns = [col.strip().replace(' ', '') for col in df.columns]
 
-        st.markdown("### Key Performance Indicators")
-        kpi1, kpi2, kpi3 = st.columns(3)
-        kpi1.metric("Total Orders Placed", f"{total_orders}")
-        kpi2.metric("Total Barrels Ordered", f"{total_barrels:,}")
-        kpi3.metric("Most Viewed Product", most_popular)
-        st.markdown("---", unsafe_allow_html=True)
-        col1, col2 = st.columns(2)
-        with col1:
-            st.subheader("Product View Count")
-            if not interactions_df.empty: st.bar_chart(interactions_df.set_index('name'))
-            else: st.info("No product interaction data yet.")
-        with col2:
-            st.subheader("Orders by Status")
-            if not orders_df.empty: st.bar_chart(orders_df['status'].value_counts())
-            else: st.info("No order data yet.")
-        st.subheader("All Customer Orders")
-        st.dataframe(orders_df, use_container_width=True)
-
-    elif page == "⚙️ Manage Shipments":
-        st.header("⚙️ Update Shipment Status")
-        orders_df = get_all_orders_for_admin()
-        if orders_df.empty: st.info("No orders to manage.")
+        # Ensure required columns exist
+        required_cols = ['Date', 'CustomerName', 'ProductName', 'Quantity', 'Price', 'CurrentStock']
+        if not all(col in df.columns for col in required_cols):
+            st.error(f"Error: Your file is missing one or more required columns. Please ensure it has: {', '.join(required_cols)}")
         else:
-            st.dataframe(orders_df[['id', 'username', 'product_name', 'destination_city', 'status']], use_container_width=True)
-            with st.form("update_shipment_form"):
-                col1, col2, col3 = st.columns([1, 2, 1])
-                selected_order_id = col1.selectbox("Order ID", orders_df['id'].tolist())
-                new_location = col2.text_input("New Location / Status Update", placeholder="e.g., 'Passing through Suez Canal'")
-                new_status = col3.selectbox("Status", ['Placed', 'In Transit', 'Delayed', 'Delivered', 'Cancelled'])
-                submitted = st.form_submit_button("Update Status", use_container_width=True)
-                if submitted and new_location:
-                    update_shipment_status(selected_order_id, new_location, new_status)
-                    st.success(f"Status for Order #{selected_order_id} updated.")
-                    st.rerun()
-                elif submitted: st.warning("Please provide a location/status update message.")
+            # Data type conversion and feature engineering
+            df['Date'] = pd.to_datetime(df['Date'])
+            df['TotalSale'] = df['Quantity'] * df['Price']
+            df_kpi = df.copy() # Use a copy for date-filtered KPIs if needed
 
-# --- MAIN APP LOGIC ---
-def main():
-    setup_database()
-    inject_custom_css()
-    if 'logged_in' not in st.session_state: st.session_state['logged_in'] = False
-    if st.session_state['logged_in']:
-        if st.session_state['role'] == 'admin': admin_dashboard()
-        else: customer_portal()
-    else: login_register_page()
+            # --- KPI Calculations ---
+            total_sales = int(df_kpi['TotalSale'].sum())
+            top_oil = df_kpi.groupby('ProductName')['Quantity'].sum().idxmax()
+            
+            customer_counts = df_kpi['CustomerName'].value_counts()
+            repeat_customers = customer_counts[customer_counts > 1].count()
+            total_customers = df_kpi['CustomerName'].nunique()
+            repeat_customer_pct = (repeat_customers / total_customers) * 100 if total_customers > 0 else 0
 
-if __name__ == "__main__":
-    main()
+            kpis = {
+                'total_sales': total_sales,
+                'top_oil': top_oil,
+                'repeat_customer_pct': repeat_customer_pct
+            }
+
+            # --- Dashboard Layout ---
+            st.header("Business Overview")
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Total Sales", f"₹{total_sales:,}")
+            col2.metric("Top-Selling Oil", top_oil)
+            col3.metric("Repeat Customers", f"{repeat_customer_pct:.2f}%")
+
+            st.markdown("---")
+
+            # --- Charts ---
+            c1, c2 = st.columns((6, 4))
+            with c1:
+                st.subheader("Daily Sales Trend")
+                daily_sales = df_kpi.groupby(df_kpi['Date'].dt.date)['TotalSale'].sum().reset_index()
+                fig_daily_sales = px.line(daily_sales, x='Date', y='TotalSale', title='Total Sales Over Time', labels={'TotalSale': 'Total Sales (₹)'})
+                fig_daily_sales.update_layout(
+                    xaxis_title='Date',
+                    yaxis_title='Total Sales (₹)',
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    paper_bgcolor='rgba(0,0,0,0)',
+                )
+                st.plotly_chart(fig_daily_sales, use_container_width=True)
+
+            with c2:
+                st.subheader("Top 3 Selling Oils")
+                top_oils_df = df_kpi.groupby('ProductName')['Quantity'].sum().nlargest(3).reset_index()
+                fig_top_oils = px.bar(top_oils_df, x='ProductName', y='Quantity', title='Top 3 Oils by Quantity Sold', text='Quantity')
+                fig_top_oils.update_layout(
+                    xaxis_title='Oil Type',
+                    yaxis_title='Quantity Sold',
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    paper_bgcolor='rgba(0,0,0,0)',
+                )
+                st.plotly_chart(fig_top_oils, use_container_width=True)
+            
+            st.markdown("---")
+
+            # --- Alerts and Forecasting ---
+            a1, a2 = st.columns(2)
+            with a1:
+                st.subheader("🚨 Low Stock Alerts")
+                stock_threshold = st.slider("Set low stock threshold (units):", 1, 50, 10)
+                latest_stock = df.sort_values('Date').drop_duplicates('ProductName', keep='last')
+                low_stock_df = latest_stock[latest_stock['CurrentStock'] <= stock_threshold][['ProductName', 'CurrentStock']]
+                
+                if not low_stock_df.empty:
+                    st.warning(f"The following items are below the {stock_threshold} unit threshold:")
+                    st.dataframe(low_stock_df.style.highlight_max(axis=0, color='darkred'))
+                else:
+                    st.success("All stock levels are healthy!")
+            
+            with a2:
+                st.subheader("📈 30-Day Demand Forecasting")
+                
+                # Prepare data for forecasting
+                daily_demand = df.groupby(df['Date'].dt.date)['Quantity'].sum().reset_index()
+                daily_demand['Date'] = pd.to_datetime(daily_demand['Date'])
+                daily_demand['Time'] = (daily_demand['Date'] - daily_demand['Date'].min()).dt.days
+
+                # Simple Linear Regression Model
+                X = daily_demand[['Time']]
+                y = daily_demand['Quantity']
+                model = LinearRegression()
+                model.fit(X, y)
+
+                # Predict for the next 30 days
+                last_time = daily_demand['Time'].max()
+                future_times = np.arange(last_time + 1, last_time + 31).reshape(-1, 1)
+                future_dates = [daily_demand['Date'].max() + timedelta(days=i) for i in range(1, 31)]
+                
+                future_preds = model.predict(future_times)
+                future_preds = np.maximum(0, future_preds) # Demand can't be negative
+
+                forecast_df = pd.DataFrame({'Date': future_dates, 'ForecastedDemand': future_preds.round().astype(int)})
+
+                fig_forecast = px.line(forecast_df, x='Date', y='ForecastedDemand', title='Forecasted Demand for Next 30 Days', markers=True)
+                fig_forecast.update_layout(
+                    xaxis_title='Date',
+                    yaxis_title='Forecasted Demand (Units)',
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    paper_bgcolor='rgba(0,0,0,0)',
+                )
+                st.plotly_chart(fig_forecast, use_container_width=True)
+
+            st.markdown("---")
+
+            # --- PDF Report Generation ---
+            st.header("📄 Monthly Report")
+            st.markdown("Generate a PDF summary of this month's performance.")
+            if st.button("Generate PDF Report"):
+                with st.spinner('Generating Report...'):
+                    pdf_data = generate_pdf_report(kpis, top_oils_df, low_stock_df)
+                    st.success('Report Generated!')
+                    st.markdown(create_download_link_pdf(pdf_data, "monthly_report"), unsafe_allow_html=True)
+
+    except Exception as e:
+        st.error(f"An error occurred while processing the file: {e}")
+        st.warning("Please ensure your file is a valid CSV or Excel file and the column names match the required format: Date, CustomerName, ProductName, Quantity, Price, CurrentStock.")
+
+else:
+    # --- Welcome Screen ---
+    st.title("Welcome to the Cold-Pressed Oil Business Dashboard")
+    st.markdown("This tool helps you analyze sales data, track key metrics, and plan for the future.")
+    st.info("To get started, upload your sales data (CSV or Excel) using the sidebar on the left. If you don't have a file, you can generate and download a sample file to see how it works.")
+    st.image("https://placehold.co/1200x400/2E3B4E/FFFFFF?text=Upload+Your+Data+to+Visualize+Insights&font=lato", use_column_width=True)
+
